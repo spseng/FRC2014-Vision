@@ -14,6 +14,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.nio.ByteBuffer;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -23,6 +24,7 @@ import javax.imageio.ImageIO;
 
 import com.googlecode.javacv.*;
 import com.googlecode.javacv.cpp.*;
+import com.googlecode.javacpp.Loader;
 
 import static com.googlecode.javacv.cpp.opencv_core.*;
 import static com.googlecode.javacv.cpp.opencv_imgproc.*;
@@ -43,9 +45,9 @@ public class JFrameApp extends JFrame {
 	private static String SAVED_IMAGES_DIR = System.getProperty("user.home") + System.getProperty("file.separator") + "Pictures";
 	
 	private JPanel contentPane;
-	private JTextField threshold;
-	private JRadioButton rdbtnR, rdbtnG, rdbtnB;
+	private JTextArea textSettings;
 	
+	private HashMap<String, Object> visionParams;
 	private BufferedImage originalImg;
 	private IplImage processedImg;
 
@@ -104,17 +106,13 @@ public class JFrameApp extends JFrame {
 		
 		Button loadSettings = new Button("Refresh");
 		loadSettings.addActionListener(new LoadYAMLListener()); 
-		loadSettings.setBounds(857, 392, 100, 23);
+		loadSettings.setBounds(857, 704, 100, 23);
 		contentPane.add(loadSettings);
 		
 		Button saveSettings = new Button("Save Settings");
 		saveSettings.addActionListener(new DumpYAMLListener());
-		saveSettings.setBounds(960, 392, 106, 23);
+		saveSettings.setBounds(960, 704, 106, 23);
 		contentPane.add(saveSettings);
-		
-		JLabel lblTolerance = new JLabel("Threshold (0-255):");
-		lblTolerance.setBounds(774, 39, 134, 15);
-		contentPane.add(lblTolerance);
 		
 		Button saveImage = new Button("Save Image");
 		saveImage.addActionListener(new SaveImageListener());
@@ -130,28 +128,9 @@ public class JFrameApp extends JFrame {
 		process.setBounds(651, 371, 96, 23);
 		contentPane.add(process);
 		
-		threshold = new JTextField();
-		threshold.setBounds(913, 39, 114, 19);
-		contentPane.add(threshold);
-		threshold.setColumns(10);
-		
-		rdbtnR = new JRadioButton("r");
-		rdbtnR.setBounds(784, 66, 44, 23);
-		contentPane.add(rdbtnR);
-		
-		rdbtnG = new JRadioButton("g");
-		rdbtnG.setBounds(783, 93, 44, 23);
-		contentPane.add(rdbtnG);
-		
-		rdbtnB = new JRadioButton("b");
-		rdbtnB.setBounds(784, 120, 149, 23);
-		contentPane.add(rdbtnB);
-		
-		//group radio buttons
-		ButtonGroup grp = new ButtonGroup();
-		grp.add(rdbtnR);
-		grp.add(rdbtnG);
-		grp.add(rdbtnB);
+		textSettings = new JTextArea();
+		textSettings.setBounds(768, 39, 296, 659);
+		contentPane.add(textSettings);
 	}
 	
 	class LoadImageListener implements ActionListener {
@@ -225,6 +204,19 @@ public class JFrameApp extends JFrame {
 		}
 		
 		public void actionPerformed(ActionEvent e) {
+			// parse vision parameters
+			if (visionParams == null || visionParams.isEmpty()) {
+				JOptionPane.showMessageDialog(contentPane, "Please save settings before processing");
+				return;
+			}
+			int threshold = Integer.parseInt((String)visionParams.get("Threshold"));
+			String thresholdChannel = visionParams.get("Channel").toString();
+			boolean drawContours = Boolean.parseBoolean((String)visionParams.get("DrawContours"));
+			
+			//debug
+//			System.out.println(Integer.toString(threshold));
+//			System.out.println(thresholdChannel);
+
 			//ACTUAL VISION PROCESSING IS HERE
 			if (originalImg == null) {
 				JOptionPane.showMessageDialog(contentPane, "Please load an image to process");
@@ -238,16 +230,39 @@ public class JFrameApp extends JFrame {
 			IplImage g = IplImage.create(width, height, IPL_DEPTH_8U, 1);
 			IplImage b = IplImage.create(width, height, IPL_DEPTH_8U, 1);
 			cvSplit(original, b, g, r, null);
-			if (rdbtnR.isSelected() && !rdbtnG.isSelected() && !rdbtnB.isSelected()) {
-				cvThreshold(r, r, Integer.parseInt(threshold.getText()), 255, 0);
+
+			switch(thresholdChannel) {
+			case "red":
+				cvThreshold(r, r, threshold, 255, 0);
 				processedImg = r.clone();
-			} else if (!rdbtnR.isSelected() && rdbtnG.isSelected() && !rdbtnB.isSelected()) {
-				cvThreshold(g, g, Integer.parseInt(threshold.getText()), 255, 0);
+				break;
+			case "green":
+				cvThreshold(g, g, threshold, 255, 0);
 				processedImg = g.clone();
-			} else if (!rdbtnR.isSelected() && !rdbtnG.isSelected() && rdbtnB.isSelected()) {
-				cvThreshold(b, b, Integer.parseInt(threshold.getText()), 255, 0);
+				break;
+			case "blue":
+				cvThreshold(b, b, threshold, 255, 0);
 				processedImg = b.clone();
-			} else System.out.println("There's a problem with the radio buttons...");
+				break;
+			default:
+				//do no thresholding
+				processedImg = original;
+				break;
+			}
+			
+			if (drawContours) {
+				//draw contours
+				CvMemStorage storage = CvMemStorage.create();
+				CvSeq contour = new CvSeq(null);
+				cvFindContours(processedImg, storage, contour, Loader.sizeof(CvContour.class), CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
+				CvSeq points = cvApproxPoly(contour, Loader.sizeof(CvContour.class),
+                    storage, CV_POLY_APPROX_DP, cvContourPerimeter(contour)*0.02, 0);
+//				cvDrawContours(processedImg, points, CvScalar.BLUE, CvScalar.BLUE, -1, 1, CV_AA);
+				cvMinAreaRect2(points, storage);
+				ByteBuffer bb = storage.asByteBuffer();
+				System.out.println(bb.hasArray());
+			}
+			
 			
 			label.setIcon(new ImageIcon(processedImg.getBufferedImage()));
 		}
@@ -274,11 +289,22 @@ public class JFrameApp extends JFrame {
 		
 		public void actionPerformed(ActionEvent e) {
 			try {		
-				HashMap<String, Object> settings = (HashMap<String, Object>)(new Yaml().load(new FileInputStream(SETTINGS_FILE)));
-				rdbtnR.setSelected((Boolean)settings.get("radioR"));
-				rdbtnG.setSelected((Boolean)settings.get("radioG"));
-				rdbtnB.setSelected((Boolean)settings.get("radioB"));
-				threshold.setText(settings.get("threshold").toString());
+				visionParams = (HashMap<String, Object>)(new Yaml().load(new FileInputStream(SETTINGS_FILE)));
+				//debug
+				if (visionParams == null) {
+					JOptionPane.showMessageDialog(contentPane, "The settings file is empty! New settings will be overwritten on next save.");
+					return;
+				}
+//				else System.out.println("Good hashmap, printing keys...\n");
+				String displayMe = "";
+				for (String key: visionParams.keySet()) {
+					//debug
+//					System.out.println("A");
+					String out = key + ": " + visionParams.get(key).toString();
+//					System.out.println(out);
+					displayMe = displayMe.concat(out + "\n");
+				}
+				textSettings.setText(displayMe);
 			} catch (FileNotFoundException e1) {
 				findYAML("The settings file cannot be found. Please select a settings file.");
 			} catch (YAMLException e2) {
@@ -290,18 +316,23 @@ public class JFrameApp extends JFrame {
 	class DumpYAMLListener implements ActionListener {
 		public void actionPerformed(ActionEvent e) {
 			try {
+				//check that we have settings to save before doing anything else
+				if (textSettings.getText().equals("")) {
+					JOptionPane.showMessageDialog(contentPane, "Settings pane is empty. Refresh settings or add new settings to overwrite.");
+					return;
+				}
 				File settingsFile = new File(SETTINGS_FILE);
 				//debug
 //				System.out.println("Creating file in " + SETTINGS_FILE);
 				//does nothing if the file already exists
 				settingsFile.createNewFile();
 				PrintWriter pw = new PrintWriter(SETTINGS_FILE);
-                HashMap<String, Object> settings = new HashMap<String, Object>();
-                settings.put("radioR", rdbtnR.isSelected());
-			    settings.put("radioB", rdbtnG.isSelected());
-			    settings.put("radioG", rdbtnB.isSelected());
-			    settings.put("threshold", Integer.parseInt(threshold.getText()));
-			    new Yaml().dump(settings, pw);
+				if (visionParams == null) visionParams = new HashMap<String, Object>();
+                for (String line : textSettings.getText().split("\n")) {
+                	String[] kv = line.split(": ");
+                	visionParams.put(kv[0], kv[1]);
+                }
+			    new Yaml().dump(visionParams, pw);
 			} catch (FileNotFoundException e1) {
 				JOptionPane.showMessageDialog(contentPane, "Settings file not found!");
 //				e1.printStackTrace();
