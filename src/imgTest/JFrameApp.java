@@ -22,6 +22,8 @@ import java.util.HashMap;
 
 import javax.imageio.ImageIO;
 
+import edu.wpi.first.wpijavacv.*;
+
 import com.googlecode.javacv.*;
 import com.googlecode.javacv.cpp.*;
 import com.googlecode.javacpp.Loader;
@@ -30,6 +32,7 @@ import static com.googlecode.javacv.cpp.opencv_core.*;
 import static com.googlecode.javacv.cpp.opencv_imgproc.*;
 
 import com.mortennobel.imagescaling.ResampleOp;
+import java.util.Arrays;
 
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.error.YAMLException;
@@ -120,11 +123,17 @@ public class JFrameApp extends JFrame {
 		contentPane.add(saveImage);
 		
 		JLabel processedLabel = new JLabel("");
-		processedLabel.setBounds(5, 371, 640, 360);
+		processedLabel.setBounds(5, 371, 320, 360);
+                processedLabel.setBorder(BorderFactory.createLineBorder(Color.red));
 		contentPane.add(processedLabel);
+                
+                JLabel processedLabel2 = new JLabel("");
+                processedLabel2.setBounds(330, 371, 320, 360);
+                processedLabel2.setBorder(BorderFactory.createLineBorder(Color.red));
+                contentPane.add(processedLabel2);
 		
 		Button process = new Button("Process");
-		process.addActionListener(new ImageProcessListener(processedLabel));
+		process.addActionListener(new ImageProcessListener(processedLabel, processedLabel2));
 		process.setBounds(651, 371, 96, 23);
 		contentPane.add(process);
 		
@@ -198,9 +207,10 @@ public class JFrameApp extends JFrame {
 	}
 	
 	class ImageProcessListener implements ActionListener {
-		JLabel label;
-		public ImageProcessListener(JLabel l) {
-			this.label = l;
+		JLabel label, label2;
+		public ImageProcessListener(JLabel L1, JLabel L2) {
+			this.label = L1;
+                        this.label2 = L2;
 		}
 		
 		public void actionPerformed(ActionEvent e) {
@@ -209,16 +219,40 @@ public class JFrameApp extends JFrame {
 				JOptionPane.showMessageDialog(contentPane, "Please save settings before processing");
 				return;
 			}
-			int threshold = Integer.parseInt((String)visionParams.get("Threshold"));
-			String thresholdChannel = visionParams.get("Channel").toString();
-			boolean drawContours = Boolean.parseBoolean((String)visionParams.get("DrawContours"));
+//			int threshold = Integer.parseInt((String)visionParams.get("Threshold"));
+//			String thresholdChannel = visionParams.get("Channel").toString();
+//			boolean drawContours = Boolean.parseBoolean((String)visionParams.get("DrawContours"));
 			
 			//debug
 //			System.out.println(Integer.toString(threshold));
 //			System.out.println(thresholdChannel);
 
 			//ACTUAL VISION PROCESSING IS HERE
-			if (originalImg == null) {
+                        int THRESHOLD = Integer.parseInt((String)visionParams.get("Threshold"));
+                        int MAX_CONTOURS = Integer.parseInt((String)visionParams.get("Max Contours"));
+//                        int EQUIV_RECT_SHORT_MIN = Integer.parseInt((String)visionParams.get("Threshold"));;
+//                        int EQUIV_RECT_SHORT_MAX = Integer.parseInt((String)visionParams.get("Threshold"));;
+//                        int EQUIV_RECT_LONG_MIN = Integer.parseInt((String)visionParams.get("Threshold"));;
+//                        int EQUIV_RECT_LONG_MAX = Integer.parseInt((String)visionParams.get("Threshold"));;
+//                        int MAX_PARTICLES = Integer.parseInt((String)visionParams.get("Threshold"));;
+                        
+                        WPIColorImage original = new WPIColorImage(originalImg);
+                        WPIBinaryImage thresh = original.getGreenChannel().getThreshold(THRESHOLD);
+                        WPIContour[] contours = thresh.findContours();
+                        System.out.println(contours.length);
+                        
+//                        WPIColorImage contourImage = new WPIColorImage(original.getBufferedImage());
+                        for (int i=0; i<MAX_CONTOURS; i++) {
+                            original.drawContour(contours[i], WPIColor.RED, 3);
+                        }
+                        if (label2 == null) System.out.println("label2 is nullD");
+                        label.setIcon(new ImageIcon(thresh.getBufferedImage()));
+                        label2.setIcon(new ImageIcon(original.getBufferedImage()));
+                        
+                        thresh.dispose();
+                        original.dispose();
+                       
+			/*if (originalImg == null) {
 				JOptionPane.showMessageDialog(contentPane, "Please load an image to process");
 				return;
 			}
@@ -258,13 +292,12 @@ public class JFrameApp extends JFrame {
 				CvSeq points = cvApproxPoly(contour, Loader.sizeof(CvContour.class),
                     storage, CV_POLY_APPROX_DP, cvContourPerimeter(contour)*0.02, 0);
 //				cvDrawContours(processedImg, points, CvScalar.BLUE, CvScalar.BLUE, -1, 1, CV_AA);
-				cvMinAreaRect2(points, storage);
-				ByteBuffer bb = storage.asByteBuffer();
-				System.out.println(bb.hasArray());
+				CvBox2D rect = cvMinAreaRect2(points, storage);
+                                float h = rect.size().height(), w = rect.size().width();
+                                System.out.println(w + " " + h);
 			}
-			
-			
-			label.setIcon(new ImageIcon(processedImg.getBufferedImage()));
+		
+			label.setIcon(new ImageIcon(processedImg.getBufferedImage()));*/
 		}
 	}
 	
