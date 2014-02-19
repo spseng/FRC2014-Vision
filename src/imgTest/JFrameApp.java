@@ -8,6 +8,8 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.WindowEvent;
+import java.awt.event.WindowListener;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileInputStream;
@@ -17,6 +19,7 @@ import java.io.PrintWriter;
 import java.nio.ByteBuffer;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 
@@ -32,6 +35,7 @@ import static com.googlecode.javacv.cpp.opencv_core.*;
 import static com.googlecode.javacv.cpp.opencv_imgproc.*;
 
 import com.mortennobel.imagescaling.ResampleOp;
+
 import java.util.Arrays;
 
 import org.yaml.snakeyaml.Yaml;
@@ -53,6 +57,7 @@ public class JFrameApp extends JFrame {
 	private HashMap<String, Object> visionParams;
 	private BufferedImage originalImg;
 	private IplImage processedImg;
+	private CanvasFrame cf1, cf2;
 
 	/**
 	 * Launch the application.
@@ -77,7 +82,6 @@ public class JFrameApp extends JFrame {
 		setTitle(TITLE);
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		setResizable(false);
-		setLocationRelativeTo(null);
 		setMaximumSize(new Dimension(WIDTH, HEIGHT));
 		setMinimumSize(new Dimension(WIDTH, HEIGHT));
 		setPreferredSize(new Dimension(WIDTH, HEIGHT));
@@ -85,6 +89,8 @@ public class JFrameApp extends JFrame {
 		contentPane.setBorder(new EmptyBorder(5, 5, 5, 5));
 		setContentPane(contentPane);
 		contentPane.setLayout(null);
+		setLocationRelativeTo(null);
+		addWindowListener(new CleanupListener());
 		
 		JLabel imageLabel = new JLabel("");
 		imageLabel.setBounds(5, 5, 640, 360);
@@ -123,14 +129,14 @@ public class JFrameApp extends JFrame {
 		contentPane.add(saveImage);
 		
 		JLabel processedLabel = new JLabel("");
-		processedLabel.setBounds(5, 371, 320, 360);
-                processedLabel.setBorder(BorderFactory.createLineBorder(Color.red));
+		processedLabel.setBounds(5, 371, 640, 360);
+        processedLabel.setBorder(BorderFactory.createLineBorder(Color.red));
 		contentPane.add(processedLabel);
                 
-                JLabel processedLabel2 = new JLabel("");
-                processedLabel2.setBounds(330, 371, 320, 360);
-                processedLabel2.setBorder(BorderFactory.createLineBorder(Color.red));
-                contentPane.add(processedLabel2);
+        JLabel processedLabel2 = new JLabel("");
+        processedLabel2.setBounds(5, 735, 640, 360);
+        processedLabel2.setBorder(BorderFactory.createLineBorder(Color.red));
+        contentPane.add(processedLabel2);
 		
 		Button process = new Button("Process");
 		process.addActionListener(new ImageProcessListener(processedLabel, processedLabel2));
@@ -140,6 +146,9 @@ public class JFrameApp extends JFrame {
 		textSettings = new JTextArea();
 		textSettings.setBounds(768, 39, 296, 659);
 		contentPane.add(textSettings);
+		
+		cf1 = new CanvasFrame("window 1");
+		cf2 = new CanvasFrame("window 2");
 	}
 	
 	class LoadImageListener implements ActionListener {
@@ -208,9 +217,10 @@ public class JFrameApp extends JFrame {
 	
 	class ImageProcessListener implements ActionListener {
 		JLabel label, label2;
+		
 		public ImageProcessListener(JLabel L1, JLabel L2) {
 			this.label = L1;
-                        this.label2 = L2;
+            this.label2 = L2;
 		}
 		
 		public void actionPerformed(ActionEvent e) {
@@ -228,29 +238,55 @@ public class JFrameApp extends JFrame {
 //			System.out.println(thresholdChannel);
 
 			//ACTUAL VISION PROCESSING IS HERE
-                        int THRESHOLD = Integer.parseInt((String)visionParams.get("Threshold"));
-                        int MAX_CONTOURS = Integer.parseInt((String)visionParams.get("Max Contours"));
-//                        int EQUIV_RECT_SHORT_MIN = Integer.parseInt((String)visionParams.get("Threshold"));;
-//                        int EQUIV_RECT_SHORT_MAX = Integer.parseInt((String)visionParams.get("Threshold"));;
-//                        int EQUIV_RECT_LONG_MIN = Integer.parseInt((String)visionParams.get("Threshold"));;
-//                        int EQUIV_RECT_LONG_MAX = Integer.parseInt((String)visionParams.get("Threshold"));;
-//                        int MAX_PARTICLES = Integer.parseInt((String)visionParams.get("Threshold"));;
-                        
-                        WPIColorImage original = new WPIColorImage(originalImg);
-                        WPIBinaryImage thresh = original.getGreenChannel().getThreshold(THRESHOLD);
-                        WPIContour[] contours = thresh.findContours();
-                        System.out.println(contours.length);
-                        
-//                        WPIColorImage contourImage = new WPIColorImage(original.getBufferedImage());
-                        for (int i=0; i<MAX_CONTOURS; i++) {
-                            original.drawContour(contours[i], WPIColor.RED, 3);
-                        }
-                        if (label2 == null) System.out.println("label2 is nullD");
-                        label.setIcon(new ImageIcon(thresh.getBufferedImage()));
-                        label2.setIcon(new ImageIcon(original.getBufferedImage()));
-                        
-                        thresh.dispose();
-                        original.dispose();
+            int THRESHOLD = Integer.parseInt((String)visionParams.get("Threshold"));
+            int MAX_CONTOURS = Integer.parseInt((String)visionParams.get("Max Contours"));
+            int CONTOUR_MIN_WIDTH = Integer.parseInt((String)visionParams.get("Min Contour Width"));
+            int CONTOUR_MAX_WIDTH = Integer.parseInt((String)visionParams.get("Max Contour Width"));
+            int CONTOUR_MIN_HEIGHT = Integer.parseInt((String)visionParams.get("Min Contour Height"));
+            int CONTOUR_MAX_HEIGHT = Integer.parseInt((String)visionParams.get("Max Contour Height"));
+//          int EQUIV_RECT_SHORT_MIN = Integer.parseInt((String)visionParams.get("Threshold"));;
+//          int EQUIV_RECT_SHORT_MAX = Integer.parseInt((String)visionParams.get("Threshold"));;
+//          int EQUIV_RECT_LONG_MIN = Integer.parseInt((String)visionParams.get("Threshold"));;
+//          int EQUIV_RECT_LONG_MAX = Integer.parseInt((String)visionParams.get("Threshold"));;
+//          int MAX_PARTICLES = Integer.parseInt((String)visionParams.get("Threshold"));;
+            
+//            cf1.showImage(img.getBufferedImage(1.0));
+            
+            //go through much pain and suffering to explicitly create separate buffers for the 3 images 
+            IplImage threshCopy = IplImage.createFrom(originalImg).clone();
+            IplImage drawCopy = IplImage.createFrom(originalImg).clone();
+            WPIColorImage threshMe = new WPIColorImage(threshCopy.getBufferedImage());
+            WPIColorImage drawMe = new WPIColorImage(drawCopy.getBufferedImage());
+
+            WPIBinaryImage thresh = threshMe.getGreenChannel().getThreshold(THRESHOLD);
+            WPIContour[] contours = thresh.findContours();
+            System.out.println(contours.length);
+          
+//          WPIColorImage contourImage = new WPIColorImage(original.getBufferedImage());
+            ArrayList<WPIPoint> points = new ArrayList<WPIPoint>();
+            for (int i=0; i<MAX_CONTOURS; i++) {
+            	if (i >= contours.length) break;
+            	WPIContour c = contours[i];
+            	if (c.getWidth() > CONTOUR_MIN_WIDTH && c.getWidth() < CONTOUR_MAX_WIDTH &&
+            			c.getHeight() > CONTOUR_MIN_HEIGHT && c.getHeight() < CONTOUR_MAX_HEIGHT) {
+            		int center_x = c.getX() + (c.getWidth() / 2);
+            		int center_y = c.getY() + (c.getHeight() / 2);
+                    drawMe.drawContour(c, WPIColor.RED, 3);
+                    drawMe.drawPoint(new WPIPoint(center_x, center_y), WPIColor.BLUE, 2);
+                    points.add(new WPIPoint(center_x, center_y));
+            	}
+            }
+            System.out.println("\t" + Integer.toString(points.size()) + "\n");
+            if (!cf1.isShowing()) cf1.setVisible(true);
+            if (!cf2.isShowing()) cf2.setVisible(true);
+            cf1.showImage(thresh.getBufferedImage());
+            cf2.showImage(drawMe.getBufferedImage());
+                
+            thresh.dispose();
+            drawMe.dispose();
+            threshMe.dispose();
+            drawCopy.release();;
+            threshCopy.release();
                        
 			/*if (originalImg == null) {
 				JOptionPane.showMessageDialog(contentPane, "Please load an image to process");
@@ -360,7 +396,8 @@ public class JFrameApp extends JFrame {
 				//does nothing if the file already exists
 				settingsFile.createNewFile();
 				PrintWriter pw = new PrintWriter(SETTINGS_FILE);
-				if (visionParams == null) visionParams = new HashMap<String, Object>();
+				//overwrite the current settings every time (allows for deletion of settings)
+				visionParams = new HashMap<String, Object>();
                 for (String line : textSettings.getText().split("\n")) {
                 	String[] kv = line.split(": ");
                 	visionParams.put(kv[0], kv[1]);
@@ -374,5 +411,51 @@ public class JFrameApp extends JFrame {
 //				e1.printStackTrace();
 			}
 		}
+	}
+	
+	class CleanupListener implements WindowListener {
+
+		@Override
+		public void windowActivated(WindowEvent arg0) {
+			// TODO Auto-generated method stub
+			
+		}
+
+		@Override
+		public void windowClosed(WindowEvent arg0) {
+			// TODO Auto-generated method stub
+			
+		}
+
+		@Override
+		public void windowClosing(WindowEvent arg0) {
+			if (cf1 != null) cf1.dispose();
+			if (cf2 != null) cf2.dispose();
+		}
+
+		@Override
+		public void windowDeactivated(WindowEvent arg0) {
+			// TODO Auto-generated method stub
+			
+		}
+
+		@Override
+		public void windowDeiconified(WindowEvent arg0) {
+			// TODO Auto-generated method stub
+			
+		}
+
+		@Override
+		public void windowIconified(WindowEvent arg0) {
+			// TODO Auto-generated method stub
+			
+		}
+
+		@Override
+		public void windowOpened(WindowEvent arg0) {
+			// TODO Auto-generated method stub
+			
+		}
+		
 	}
 }
