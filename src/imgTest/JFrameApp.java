@@ -60,22 +60,6 @@ public class JFrameApp extends JFrame {
 	private CanvasFrame cf1, cf2;
 
 	/**
-	 * Launch the application.
-	 */
-	public static void main(String[] args) {
-		EventQueue.invokeLater(new Runnable() {
-			public void run() {
-				try {
-					JFrameApp frame = new JFrameApp();
-					frame.setVisible(true);
-				} catch (Exception e) {
-					e.printStackTrace();
-				}
-			}
-		});
-	}
-
-	/**
 	 * Create the frame.
 	 */
 	public JFrameApp() {
@@ -253,39 +237,10 @@ public class JFrameApp extends JFrame {
 //            cf1.showImage(img.getBufferedImage(1.0));
             
             //go through much pain and suffering to explicitly create separate buffers for the 3 images 
-            IplImage threshCopy = IplImage.createFrom(originalImg).clone();
-            IplImage drawCopy = IplImage.createFrom(originalImg).clone();
-            WPIColorImage threshMe = new WPIColorImage(threshCopy.getBufferedImage());
-            WPIColorImage drawMe = new WPIColorImage(drawCopy.getBufferedImage());
-
-            WPIBinaryImage thresh = threshMe.getGreenChannel().getThreshold(THRESHOLD);
-            WPIContour[] contours = thresh.findContours();
-            System.out.println(contours.length);
-          
-//          WPIColorImage contourImage = new WPIColorImage(original.getBufferedImage());
-            ArrayList<WPIPoint> points = new ArrayList<WPIPoint>();
-            for (int i=0; i<MAX_CONTOURS; i++) {
-            	if (i >= contours.length) break;
-            	WPIContour c = contours[i];
-            	if (c.getWidth() > CONTOUR_MIN_WIDTH && c.getWidth() < CONTOUR_MAX_WIDTH &&
-            			c.getHeight() > CONTOUR_MIN_HEIGHT && c.getHeight() < CONTOUR_MAX_HEIGHT) {
-            		int center_x = c.getX() + (c.getWidth() / 2);
-            		int center_y = c.getY() + (c.getHeight() / 2);
-                    drawMe.drawContour(c, WPIColor.RED, 3);
-                    drawMe.drawPoint(new WPIPoint(center_x, center_y), WPIColor.BLUE, 2);
-                    points.add(new WPIPoint(center_x, center_y));
-            	}
-            }
-            System.out.println("\t" + Integer.toString(points.size()) + "\n");
             if (!cf1.isShowing()) cf1.setVisible(true);
             if (!cf2.isShowing()) cf2.setVisible(true);
             cf1.showImage(thresh.getBufferedImage());
-            cf2.showImage(drawMe.getBufferedImage());
-                
-            thresh.dispose();
-            drawMe.dispose();
-            threshMe.dispose();
-            drawCopy.release();;
+            cf2.showImage(drawMe.getBufferedImage());;
             threshCopy.release();
                        
 			/*if (originalImg == null) {
